@@ -5,5 +5,5 @@ import java.util.*
 
 interface Parser {
 
-    fun parseToPostfix(tokens: List<Token>): Queue<Token>
+    fun parseToPostfix(tokensWithIgnore: List<Token>): List<Token>
 }

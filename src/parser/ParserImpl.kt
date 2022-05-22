@@ -7,23 +7,31 @@ import java.util.*
 
 class ParserImpl : Parser {
 
-    private val postfix: Queue<Token> = LinkedList()
+    private val postfix: MutableList<Token> = mutableListOf()
     private val stack: Stack<Token> = Stack()
 
-    override fun parseToPostfix(tokens: List<Token>): Queue<Token> {
-        for (token in tokens) {
+    private val grammarFactory: GrammarFactory = GrammarFactoryImpl()
+    private val grammars: Map<TokenType, Grammar> = grammarFactory.create()
+
+    private val processorFactory: StructureProcessorFactory = StructureProcessorFactoryImpl()
+    private val processors: Map<TokenType, StructureProcessor> = processorFactory.create()
+
+    override fun parseToPostfix(tokensWithIgnore: List<Token>): List<Token> {
+        val tokens = tokensWithIgnore.filter { it.type !is TokenType.Ignore }
+        for (i in tokens.indices) {
+            val token = tokens[i]
             when (token.type) {
                 is TokenType.Operator -> {
                     if (token.type.priority == TokenPriority.ONE) {
                         processFirstPriorityOperator(token)
                     } else {
-                        processOperator(token)
+                        processOperator(token, tokens.subList(i + 1, tokens.size))
                     }
                 }
                 is TokenType.Vars -> {
                     postfix.add(token)
                 }
-                is TokenType.Ignore -> Unit
+                else -> Unit
             }
         }
 
@@ -38,15 +46,20 @@ class ParserImpl : Parser {
         return postfix
     }
 
-    private fun processOperator(token: Token) {
+    private fun processOperator(token: Token, notProcessedTokens: List<Token>) {
         require(token.type is TokenType.Operator)
-        if (stack.isEmpty()) {
+        if (token.type.priority == TokenPriority.LOWEST) {
+            processLowestPriority(token, notProcessedTokens)
+        } else if (stack.isEmpty()) {
             stack.add(token)
         } else {
             while (stack.isNotEmpty()) {
                 val topElement = stack.peek()
                 require(topElement.type is TokenType.Operator)
-                if (token.type.priority >= topElement.type.priority) {
+                if (topElement.type.priority == TokenPriority.ONE) {
+                    stack.add(token)
+                    return
+                } else if (token.type.priority >= topElement.type.priority) {
                     postfix.add(stack.pop())
                 } else {
                     break
@@ -56,8 +69,16 @@ class ParserImpl : Parser {
         }
     }
 
+    private fun processLowestPriority(token: Token, notProcessedTokens: List<Token>) {
+        val tokenType = token.type
+        require(tokenType is TokenType.Operator && tokenType.priority == TokenPriority.LOWEST)
+        grammars[tokenType]?.checkSyntax(notProcessedTokens)
+        processors[tokenType]?.processStructure(notProcessedTokens, stack, postfix)
+                ?: throw java.lang.IllegalArgumentException("This token cant be processed yet: $token")
+    }
+
     private fun processFirstPriorityOperator(token: Token) {
-        if (stack.isEmpty()) {
+        if (stack.isEmpty() && token.type !is TokenType.Operator.Service) {
             stack.add(token)
         } else {
             when (token.type) {
@@ -85,35 +106,41 @@ class ParserImpl : Parser {
 
     private fun processEndOperation(border: PushOutBorder) {
         while (stack.isNotEmpty()) {
-            val nextToken = stack.pop()
+            val nextToken = stack.peek()
             when (border) {
                 PushOutBorder.END_OF_STACK -> {
-                    postfix.add(nextToken)
-                    requireNotHighestPriority(nextToken)
+                    if (nextToken.type is TokenType.Operator && nextToken.type.priority == TokenPriority.ONE) {
+                        break
+                    } else {
+                        postfix.add(stack.pop())
+                    }
                 }
                 PushOutBorder.L_CURLY -> {
                     if (nextToken.type !is TokenType.Operator.LCurlyBracket) {
-                        postfix.add(nextToken)
+                        if (nextToken.type is TokenType.Operator && nextToken.type.priority == TokenPriority.ONE) {
+                            break
+                        } else {
+                            postfix.add(stack.pop())
+                        }
                     } else {
-                        requireNotHighestPriority(nextToken)
+                        stack.pop()
+                        break
                     }
                 }
                 PushOutBorder.L -> {
                     if (nextToken.type !is TokenType.Operator.LBracket) {
-                        postfix.add(nextToken)
+                        if (nextToken.type is TokenType.Operator && nextToken.type.priority == TokenPriority.ONE) {
+                            break
+                        } else {
+                            postfix.add(stack.pop())
+                        }
                     } else {
-                        requireNotHighestPriority(nextToken)
+                        stack.pop()
+                        break
                     }
                 }
             }
         }
-    }
-
-    private fun requireNotHighestPriority(token: Token) {
-        if (token.type is TokenType.Operator)
-            require(token.type.priority != TokenPriority.ONE) {
-                "Unexpected token for this position: $token stack: $stack"
-            }
     }
 
     enum class PushOutBorder {

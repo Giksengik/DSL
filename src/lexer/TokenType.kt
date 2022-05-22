@@ -14,7 +14,7 @@ sealed class TokenType(val regex: String) {
         object LBracket : Service("^\\($", TokenPriority.ONE)
         object RBracket : Service("^\\)$", TokenPriority.ONE)
         object LCurlyBracket : Service("^\\{$", TokenPriority.ONE)
-        object RCurlyBracket : Service("^\\{$", TokenPriority.ONE)
+        object RCurlyBracket : Service("^\\}$", TokenPriority.ONE)
         object EndOperation : Service("^\\;$", TokenPriority.ONE)
 
         object Not : Logical("^!$", TokenPriority.TWO), Unary
@@ -38,10 +38,10 @@ sealed class TokenType(val regex: String) {
         object LogicalOr : Logical("^\\|\\|$", TokenPriority.EIGHT), Binary
 
         object Assignment : Service("^=$", TokenPriority.NINE), Binary
-        object If : Service("^if$", TokenPriority.TEN)
-        object Else : Service("^else$", TokenPriority.TEN)
-        object Elif : Service("^elif$", TokenPriority.TEN)
-        object While : Service("^while$", TokenPriority.TEN)
+        object If : Service("^if$", TokenPriority.LOWEST)
+        object Else : Service("^else$", TokenPriority.LOWEST)
+        object Elif : Service("^elif$", TokenPriority.LOWEST)
+        object While : Service("^while$", TokenPriority.LOWEST)
     }
 
     sealed class Vars(regex: String) : TokenType(regex) {
@@ -52,8 +52,16 @@ sealed class TokenType(val regex: String) {
 
     sealed class Ignore(regex: String) : TokenType(regex)
     object Space : Ignore("^\\s{1,}$")
+
+    sealed class Meta(regex: String) : TokenType(regex)
+    sealed class BlockInfo(val length: Int) : Meta(REGEX_EMPTY)
+    class LogicalBlock(length: Int) : BlockInfo(length)
+    class ExecutionBlock(length: Int) : BlockInfo(length)
+    private companion object {
+        const val REGEX_EMPTY = ""
+    }
 }
 
 enum class TokenPriority {
-    ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, TEN
+    ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, LOWEST
 }

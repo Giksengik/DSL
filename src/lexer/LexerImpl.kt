@@ -60,7 +60,7 @@ class LexerImpl : Lexer {
                 availableTokenTypes.first { it != TokenType.Vars.Variable }
             }
             else ->
-                throw IllegalArgumentException("Input $input can not be prossed. There are too many tokens for this input : $availableTokenTypes")
+                throw IllegalArgumentException("Input $input can not be processed. There are too many tokens for this input : $availableTokenTypes")
         }
     }
 
